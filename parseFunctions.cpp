@@ -3,294 +3,279 @@
 #include "prototypes.h"
 
 bool parse_query() {
-	int state = 0;
-	bool valid = false;
-	short whereState = 0;
-	
-	while (state != -1) {
-		switch(state) {
-			case 0:	// SELECT
-				if (token == "SELECT") {
-					getToken();
-					if(parse_attributes()) {	// Save tokens for project relational algebra
-						state = 1;
-					}
-				} else
-					quit("ERR: Expected 'SELECT' but got " + token);
-				break;
-				
-			case 1:	// FROM
-				getToken();
-				if (token == "FROM") {			// save tokens for relations in relational algebra/leaves in query tree
-					getToken();
-					if (parse_tables()) {
-						state = 2;
-					}
-				} else
-					quit("ERR: Expected 'FROM' but got " + token);
-				break;
-				
-			case 2:	// WHERE
-				if (token == "WHERE") {			// save inequalities for select relational algebra
-					//cout << "\n\nWHERE\n\n";
-					
+	//global variable(s):
+	string tableToken;
 
-					// state machine for WHERE clause
-					// This could probably be put in it's own function, considering WHERE 
-					// is a shit show in the state diagram
-					while(whereState >= 0) {
-						switch(whereState) {
-							schemaLL *runner;
-							case 0:	// check for an attribute
-								getToken();
-									
-								runner = &schema;
-								if(token.find(".") < strlen(token.c_str())) {		// check if attribute includes a '.'
-									schemaLL *runner = &schema;
-									string table = token;
 
-									table.erase(table.find("."), strlen(table.c_str()));	// get table associated with attribute
-									token.erase(0, token.find(".") + 1);					// get attribute
+	bool isKeyword();
+	bool isInteger();
+	bool isAlias();
+	bool isTable();
+	bool isAttribute();
+	bool isString();
+	bool isReal();
+	bool isDate();
 
-									while(runner != NULL) {
-										if(table == runner->m_tableName) {
-											if(token == runner->m_attributeName) {
-												whereState = 1;
-												break;
-											} else {
-												whereState = -1;
-											}
-										} else
-											whereState = -1;
-										runner = runner->m_next;
-									}
-								} else {		// No table is specified
-									while(runner != NULL) {
-										if (token == runner->m_attributeName) {
-											whereState = 1;
-											break;
-										} 
-										whereState = -1;
-										runner = runner->m_next;
-									}
-								}
+	void checkAlias(); //??
 
-								break;
-							case 1:	// check for comparison operator
-								getToken();
-		
-								for (int i = 0; i < COMPARE_SIZE; i++) {
-									if (token == COMPARE[i]) {
-										whereState = 2; 	// There is a comparison operator present.
-										break;
-									} else {
-										whereState = 3;	// Token is not a comparison operator. Check if AS, EXISTS, or NOT
-									}
-								}
+	void parse_UnaryOperator();
+	void parse_BinaryOperator();
+	void parse_BitwiseOperator(); //need?
+	void parse_LogicalOperator(); //need?
+	void parse_SetOperator();
+	void parse_AggregateOperator();
+	void parse_Comparison(); //need?
 
-								break;
-							case 2: // check for valid right side of comparison
-								getToken();
+	void parse_AliasAssignment();
+	void parse_AggregateFunction();
+	void parse_Member();
 
-								// token must be attribute, constant, or nested query w/ aggregate function.
+	void parse_Expression();
+	void parse_BinaryExpression();
+	void parse_NotLikeExpression();
+	void parse_IsExpression();
+	void parse_BetweenExpression();
+	void parse_InExpression();
 
-								// check for an attribute
-	
-								runner = &schema;
-								if(token.find(".") < strlen(token.c_str())) {		// check if attribute includes a '.'
-									schemaLL *runner = &schema;
-									string table = token;
+	void parse_SelectStatement();
+	void parse_InnerSelect();
+	void parse_FromStatement();
+	void parse_InnerFrom();
+	void parse_WhereStatement();
+	void parse_GroupByStatement();
+	void parse_HavingStatement();
+	void parse_OrderByStatement();
 
-									table.erase(table.find("."), strlen(table.c_str()));	// get table associated with attribute
-									token.erase(0, token.find(".") + 1);					// get attribute
+	void quit() //need?
 
-									runner = &schema;
-									while(runner != NULL) {
-										if(table == runner->m_tableName) {
-											if(token == runner->m_attributeName) {
-												whereState = 4;
-												break;
-											} else
-												whereState = -1;
-										} else {
-											whereState = -1;
-										}
-										runner = runner->m_next;
-									}
-								} else {
-									while(runner != NULL) {
-										if (token == runner->m_attributeName) {
-											whereState = 4;
-											break;
-										} 
-										whereState = -1;
-										runner = runner->m_next;
-									}
-								}
+	/////////////////////////////////////////
 
-								if(whereState == 4){
-									break;
-								} else {
-									// check if token is a constant of matching type
-
-									// check for query returning an aggregate function
-								}
-
-								break;
-							case 3: // check NOT, AS, and EXISTS
-								if(token == "NOT")
-									getToken();
-
-								if(token == "IN" || "EXISTS") {
-									getToken();
-
-									if(token == "(") { // check for opening parenthesis
-										getToken();
-
-										if(parse_query()) { // check for valid query
-											//getToken();
-
-											if(token == ")") { // check for closing parenthesis
-												whereState = 4;
-											} else
-												whereState = -1;
-										} else
-											whereState = -1;
-									} else
-										whereState = -1;
-								} else
-									whereState = -1;
-
-								break;
-							case 4: // check for AND or OR
-								getToken();
-
-								if(token == "AND" || token == "OR"){
-									whereState = 0;
-								} else {
-									whereState = -1;
-									valid = true;		// query is currently in a valid state
-								}
-
-								break;
-						}
-					}
-					if(valid){
-						state = -1;		// this exits the while loop if the WHERE ends in a valid state
-										// it will have to be taken out in order to check for the rest
-										// couldn't think of a way to determine if the query is over since
-										//	his test data doesn't include semi colons and it's 4 am
-					}
-				} else 
-					state = -1;
-				break;
-
-			case 3: // CONTAINS
-
-				break;
-			case 4:	// GROUP BY
-
-				break;
-			case 5:	// HAVING
-
-				break;
-			case 6:	// UNION
-
-				break;
-			case 7:	// INTERSECT
-
-				break;
-			case 8:	// EXCEPT
-				break;
-		}
-	}
-	
-	return valid;
-}
-
-/*	validates that all attributes are present in the schema
- * 	returns true if attribute or attribute list is valid
- */
-bool parse_attributes() {
-	string wholeToken = "";
-	bool valid = false;
-	
-	// checks if there is a list of attributes
-	if(token.find(".") < strlen(token.c_str())) {		// check if attribute includes a '.'
-		schemaLL *runner = &schema;
-		string table = token;
-
-		table.erase(table.find("."), strlen(table.c_str()));	// get table associated with attribute
-		token.erase(0, token.find(".") + 1);					// get attribute
-
-		while(runner != NULL) {
-			if(table == runner->m_tableName) {
-				if(token == runner->m_attributeName) {
-					valid = true;
-					break;
-				}
-				if(token == runner->m_attributeName + ",") {
-					getToken();
-					valid = parse_attributes();
-					break;
-				}
-			}
-			runner = runner->m_next;
-		}
-	} else {
-		if(token[strlen(token.c_str()) - 1] == ',' && parse_schema(attributeName)) {
-			getToken();
-			valid = parse_attributes();
-		} else { // if there isn't a list check if the attribute is in the schema
-			valid = parse_schema(attributeName);
-
-			//getToken();
-
-			// checks if a comma is the token after an attribute
-			// if so, parse_attributes is recalled on the next token
-			// if(token == ",") {
-			// 	getToken();
-			// 	valid = parse_attributes();
-			// }
-		}
+	bool isKeyword(){
+	  if(token=="SELECT"||token=="FROM"||token=="AS"||token=="WHERE"||token=="NOT"||
+	     token=="OR"||token=="AND"||token=="GROUP"||token=="BY"||token=="HAVING"||
+	     token=="IN"||token=="MAX"||token=="MIN"||token=="+"||token=="-"||
+	     token=="~"||token=="*"||token=="/"||token=="%"||token=="ALL"||token=="ANY"||
+	     token=="BETWEEN"||token=="EXISTS"||token=="LIKE"||token=="SOME"||token=="UNION"||
+	     token=="INTERSECT"||token=="EXCEPT"||token=="AVG"||token=="COUNT"||token=="SUM"||
+	     token=="<"||token==">"||token=="="||token==">="||token=="<="||token=="<>"||
+	     token=="!="||token=="!>"||token=="!<")
+	    return true;
+	  else
+	    return false;
 	}
 
-	return valid;
-}
+	bool isInteger(){
+	  int i=0, k=0, tok_size, state=1;
+	  char tok[50];
 
-/*	validates that all tables are present in the schema
- *	Handles any renaming to the data structure
- */
-bool parse_tables() {
-	bool valid = false;
-	
-	// checks if there is a list of tables
-	if(token[strlen(token.c_str()) - 1] == ',' && parse_schema(tableName)) {
-		getToken();
-		valid = parse_tables();
-	} else { // if there isn't a list check if the table is in the schema
-		valid = parse_schema(tableName);
+	  strncpy(tok, token.c_str(), sizeof(tok)); //turn token (string) into chars, store in char array c[].
+	  tok[sizeof(tok)-1] = 0;
+	  tok_size = sizeof(tok);  
 
-		getToken();
-
-		// checks if a comma is the token after an table
-		// if so, parse_tables is recalled on the next token
-		if(token == ",") {
-			getToken();
-			valid = parse_tables();
-		}
+	  while(k<tok_size){
+	    switch(state){
+	      case 1:
+		if(tok[k]=='+' || tok[k]=='-')
+		  state=2;
+		else if(tok[k]>='0' || tok[k]<='9')
+		  state=3;
+		else
+		  state=4;
+	      break;
+	      case 2:
+		if(tok[k]>='0' || tok[k]<='9')
+		  state=3;
+		else
+		  state=4;
+	      break;
+	      case 3:
+		if(tok[k]>='0' || tok[k]<='9')
+		  state=3;
+		else
+		  state=4;
+	      break;
+	      default:        //if in state 4, failure
+		return false;
+	    }//switch
+	  }//while
+	  if(k==tok_size){
+	    switch(state){
+	      case 3: return true;
+	      default: return false;
+	    }//switch
+	  }//if
 	}
 
-	// add renaming using the "AS" keyword 
-	// rename will be assigned to table->m_alias
-	
-	return valid;
-}
+	bool isAlias(){
+	    int i=0, k=0, tok_size, state=1;
+	  char tok[50];
 
-/*	pass it a value of the enumeration dataType
- * 	the value you will determine which variable of the LL you run through
- */
-bool parse_schema(const dataType data) {
+	  strncpy(tok, token.c_str(), sizeof(tok)); //turn token (string) into chars, store in char array c[].
+	  tok[sizeof(tok)-1] = 0;
+	  tok_size = sizeof(tok);
+
+	  if(!isKeyword(token)){
+	    while(k<tok_size){ //for each character in tok
+	      switch(state){
+		case 1:
+		  if(tok[k]>='a' && tok[k]<='z')
+		    state=3;
+		  else
+		    state=2;
+		  break;
+		case 3:
+		  if((tok[k]>='a' && tok[k]<='z')||(tok[k]>='0' && tok[k]<='9')
+		    state=3;
+		  else
+		    state=2;
+		  break;
+		default: //state 2=failure
+		  return false;
+	      }//switch
+	      k++;
+	    }//while
+	    if(k==tok_size){
+	      switch(state){
+		case 3: return true;
+		default: return false;
+	      }//switch
+	    }//if
+	  }
+	}
+
+	bool isTable(){
+	  if (token=="Sailors"||token=="Boats"||token=="Reserves"){
+	    tableToken = token;
+	    return true;
+	  }
+	  else
+	    return false;
+	}
+
+	bool isAttribute(){
+	  if(tableToken=="Sailors"){
+	    if(token=="sid"||token=="sname"||token=="rating"||token=="age")
+	      return true;
+	    else
+	      return false;
+	  } else if(tableToken=="Boats"){
+	    if(token=="bid"||token=="bname"||token=="color")
+	      return true;
+	    else
+	      return false;
+	  } else if(tableToken=="Reserves"){
+	    if(token=="sid"||token=="bid"||token=="day")
+	      return true;
+	    else
+	      return false;
+	  } else
+	    return false;
+	}
+
+	bool isString(){
+	  int i=0, k=0, tok_size, state=0;
+	  char tok[50];
+
+	  strncpy(tok, token.c_str(), sizeof(tok));
+	  tok[sizeof(tok)-1] = 0;
+	  tok_size = sizeof(tok);
+
+	  while(k<tok_size){
+	    switch(state){
+	      case 1:
+		if(tok[k]=='
+	      break;
+	    }
+	  }
+	}
+
+	bool isReal(){
+	}
+
+	bool isDate(){
+	}
+
+	void checkAlias(){
+	}
+
+
+	void parse_UnaryOperator(){
+	}
+
+	void parse_BinaryOperator(){
+	}
+
+	void parse_BitwiseOperator(){
+	}
+
+	void parse_LogicalOperator(){
+	}
+
+	void parse_SetOperator(){
+	}
+
+	void parse_AggregateOperator(){
+	}
+
+	void parse_Comparison(){
+	}
+
+
+	void parse_AliasAssignment(){
+	}
+
+	void parse_AggregateFunction(){
+	}
+
+	void parse_Member(){
+	}
+
+
+	void parse_Expression(){
+	}
+
+	void parse_BinaryExpression(){
+	}
+
+	void parse_NotLikeExpression(){
+	}
+
+	void parse_IsExpression(){
+	}
+
+	void parse_BetweenExpression(){
+	}
+
+	void parse_InExpression(){
+	}
+
+
+	void parse_SelectStatement(){
+	}
+
+	void parse_InnerSelect(){
+	}
+
+	void parse_FromStatement(){
+	}
+
+	void parse_InnerFrom(){
+	}
+
+	void parse_WhereStatement(){
+	}
+
+	void parse_GroupByStatement(){
+	}
+
+	void parse_HavingStatement(){
+	}
+
+	void parse_OrderByStatement(){
+	}
+	   
+}
+/*bool parse_schema(const dataType data) {
 	schemaLL *runner = &schema;
 	bool valid = false;
 	
@@ -334,4 +319,4 @@ bool parse_schema(const dataType data) {
 	}
 	
 	return valid;
-}
+}*/
